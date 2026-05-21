@@ -21,7 +21,8 @@ export function mockLlm(fixtures: Record<string, unknown>): LlmClient {
       _prompt: string,
       _model?: string,
     ): Promise<T> {
-      const key = (schema.def as { description?: string }).description;
+      // zod v4 stores describe() on schema.description, not schema.def.description.
+      const key = (schema as { description?: string }).description;
       const fixture = (key && key in fixtures)
         ? fixtures[key]
         : Object.values(fixtures)[0];
