@@ -13,6 +13,25 @@ const CATEGORY_MAP: Record<Category, CallBase> = {
   contract_analysis: { provider: "bazaar/contract", endpoint: "bazaar/contract", estimatedCostUsdc: 0.003 },
 };
 
+const ENDPOINT_ENV_MAP: Record<Exclude<Category, "ens">, string> = {
+  sanctions: "BAZAAR_OFAC_URL",
+  labels: "BAZAAR_LABELS_URL",
+  web_sentiment: "BAZAAR_WEB_SEARCH_URL",
+  contract_analysis: "BAZAAR_CONTRACT_URL",
+  onchain_history: "ETHERSCAN_X402_URL",
+};
+
+export function resolveEndpointUrl(category: Exclude<Category, "ens">): string {
+  const envVar = ENDPOINT_ENV_MAP[category];
+  const url = Deno.env.get(envVar) ?? "";
+  if (!url) {
+    throw new Error(
+      `Endpoint URL not configured for category "${category}". Set ${envVar} env var.`,
+    );
+  }
+  return url;
+}
+
 export function resolveBazaarEndpoints(
   categories: Category[],
   _chain: Chain,

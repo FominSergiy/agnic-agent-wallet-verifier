@@ -39,6 +39,8 @@ export interface Receipt {
   durationMs: number;
   status: "ok" | "error" | "timeout" | "skipped_budget";
   error?: string;
+  paid?: boolean;
+  network?: string;
 }
 
 export interface AgentCtx {

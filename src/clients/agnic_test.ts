@@ -1,0 +1,135 @@
+import { assertEquals, assertRejects } from "@std/assert";
+import { agnicFetch, AgnicFetchError } from "./agnic.ts";
+
+function mockFetch(
+  status: number,
+  body: unknown,
+  headers: Record<string, string> = {},
+): typeof globalThis.fetch {
+  return (_url, _init) =>
+    Promise.resolve(
+      new Response(JSON.stringify(body), {
+        status,
+        headers: { "Content-Type": "application/json", ...headers },
+      }),
+    );
+}
+
+Deno.test("agnicFetch: paid=true response parses amountUsd from header", async () => {
+  Deno.env.set("AGNIC_API_KEY", "test-key");
+  const orig = globalThis.fetch;
+  globalThis.fetch = mockFetch(200, { result: "ok" }, {
+    "X-Agnic-Paid": "true",
+    "X-Agnic-Amount": "0.25",
+    "X-Agnic-Network": "base-sepolia",
+    "X-Agnic-Scheme": "exact",
+  });
+  try {
+    const r = await agnicFetch("https://example.com/paid");
+    assertEquals(r.paid, true);
+    assertEquals(r.amountUsd, 0.25);
+    assertEquals(r.network, "base-sepolia");
+    assertEquals(r.scheme, "exact");
+    assertEquals((r.data as { result: string }).result, "ok");
+  } finally {
+    globalThis.fetch = orig;
+    Deno.env.delete("AGNIC_API_KEY");
+  }
+});
+
+Deno.test("agnicFetch: paid=false response has amountUsd=0", async () => {
+  Deno.env.set("AGNIC_API_KEY", "test-key");
+  const orig = globalThis.fetch;
+  globalThis.fetch = mockFetch(200, { result: "free" }, { "X-Agnic-Paid": "false" });
+  try {
+    const r = await agnicFetch("https://example.com/free");
+    assertEquals(r.paid, false);
+    assertEquals(r.amountUsd, 0);
+    assertEquals(r.network, null);
+    assertEquals(r.scheme, null);
+  } finally {
+    globalThis.fetch = orig;
+    Deno.env.delete("AGNIC_API_KEY");
+  }
+});
+
+Deno.test("agnicFetch: maxValueUsd converts to atomic units", async () => {
+  Deno.env.set("AGNIC_API_KEY", "test-key");
+  const orig = globalThis.fetch;
+  let capturedUrl = "";
+  globalThis.fetch = (url, _init) => {
+    capturedUrl = url.toString();
+    return Promise.resolve(
+      new Response(JSON.stringify({}), {
+        status: 200,
+        headers: { "X-Agnic-Paid": "false" },
+      }),
+    );
+  };
+  try {
+    await agnicFetch("https://example.com", { maxValueUsd: 0.001 });
+    // $0.001 * 1_000_000 = 1000 atomic units
+    assertEquals(capturedUrl.includes("maxValue=1000"), true);
+  } finally {
+    globalThis.fetch = orig;
+    Deno.env.delete("AGNIC_API_KEY");
+  }
+});
+
+Deno.test("agnicFetch: insufficient_balance throws AgnicFetchError", async () => {
+  Deno.env.set("AGNIC_API_KEY", "test-key");
+  const orig = globalThis.fetch;
+  globalThis.fetch = mockFetch(402, {
+    error: "insufficient_balance",
+    error_description: "Not enough USDC balance",
+  });
+  try {
+    await assertRejects(
+      () => agnicFetch("https://example.com"),
+      AgnicFetchError,
+      "insufficient_balance",
+    );
+  } finally {
+    globalThis.fetch = orig;
+    Deno.env.delete("AGNIC_API_KEY");
+  }
+});
+
+Deno.test("agnicFetch: payment_exceeds_max throws AgnicFetchError", async () => {
+  Deno.env.set("AGNIC_API_KEY", "test-key");
+  const orig = globalThis.fetch;
+  globalThis.fetch = mockFetch(400, {
+    error: "payment_exceeds_max",
+    error_description: "Required amount exceeds maxValue",
+  });
+  try {
+    await assertRejects(
+      () => agnicFetch("https://example.com"),
+      AgnicFetchError,
+      "payment_exceeds_max",
+    );
+  } finally {
+    globalThis.fetch = orig;
+    Deno.env.delete("AGNIC_API_KEY");
+  }
+});
+
+Deno.test("agnicFetch: missing AGNIC_API_KEY throws before making any fetch call", async () => {
+  Deno.env.delete("AGNIC_API_KEY");
+  let fetchCalled = false;
+  const orig = globalThis.fetch;
+  globalThis.fetch = (_url, _init) => {
+    fetchCalled = true;
+    return Promise.resolve(new Response("", { status: 200 }));
+  };
+  try {
+    await assertRejects(
+      () => agnicFetch("https://example.com"),
+      Error,
+      "AGNIC_API_KEY not set",
+    );
+    assertEquals(fetchCalled, false);
+  } finally {
+    globalThis.fetch = orig;
+  }
+});
