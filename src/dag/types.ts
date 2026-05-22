@@ -45,7 +45,7 @@ export const RiskReportSchema = z.object({
   summary: z.string(),
   recommendation: z.enum(["proceed", "caution", "block"]),
   generatedAt: z.string(),
-});
+}).describe("RiskReport");
 export type RiskReport = z.infer<typeof RiskReportSchema>;
 
 export interface NodeResult {
