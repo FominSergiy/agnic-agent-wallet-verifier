@@ -143,14 +143,22 @@ Deno.test("buildCallFromInfoViaLlm uses LLM to construct args", async () => {
     url: "https://svc.example/v1/screen?wallet=" + ADDR,
     method: "GET",
   };
-  const captured: { model?: string; promptHasAddress?: boolean } = {};
+  const captured: {
+    model?: string;
+    toolName?: string;
+    promptHasAddress?: boolean;
+  } = {};
   const llm: LlmClient = {
     generateStructured<T>(
       schema: z.ZodType<T>,
       prompt: string,
-      model?: string,
+      optsOrModel?: { model?: string; toolName?: string } | string,
     ): Promise<T> {
-      captured.model = model;
+      const opts = typeof optsOrModel === "string"
+        ? { model: optsOrModel }
+        : optsOrModel ?? {};
+      captured.model = opts.model;
+      captured.toolName = opts.toolName;
       captured.promptHasAddress = prompt.includes(ADDR);
       return Promise.resolve(schema.parse(fixture));
     },
@@ -164,8 +172,10 @@ Deno.test("buildCallFromInfoViaLlm uses LLM to construct args", async () => {
   assertEquals(built.url, fixture.url);
   assertEquals(built.method, "GET");
   assertEquals(captured.promptHasAddress, true);
-  // model is forwarded — should be a non-empty string identifier
+  // model is forwarded as opts.model
   assertEquals(typeof captured.model === "string" && captured.model.length > 0, true);
+  // toolName is forwarded
+  assertEquals(captured.toolName, "build_http_call");
 });
 
 Deno.test("buildCallFromInfoViaLlm throws AdapterFailedError when LLM throws", async () => {

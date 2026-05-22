@@ -1,17 +1,24 @@
-import { generateStructured } from "../gateway.ts";
+import { generateStructured, type GenerateStructuredOpts } from "../gateway.ts";
 import { z } from "zod";
 
 export interface LlmClient {
+  /**
+   * Produce structured output matching the given zod schema.
+   *
+   * Accepts either a model string (legacy 3-arg form) or an options object
+   * with toolName/toolDescription/toolExample to give Anthropic models
+   * stronger grounding and reduce envelope-wrapping bugs.
+   */
   generateStructured<T>(
     schema: z.ZodType<T>,
     prompt: string,
-    model?: string,
+    optsOrModel?: GenerateStructuredOpts | string,
   ): Promise<T>;
 }
 
 export const defaultLlm: LlmClient = {
-  generateStructured: (schema, prompt, model) =>
-    generateStructured(schema, prompt, model),
+  generateStructured: (schema, prompt, optsOrModel) =>
+    generateStructured(schema, prompt, optsOrModel),
 };
 
 export function mockLlm(fixtures: Record<string, unknown>): LlmClient {
@@ -19,7 +26,7 @@ export function mockLlm(fixtures: Record<string, unknown>): LlmClient {
     generateStructured<T>(
       schema: z.ZodType<T>,
       _prompt: string,
-      _model?: string,
+      _optsOrModel?: GenerateStructuredOpts | string,
     ): Promise<T> {
       // zod v4 stores describe() on schema.description, not schema.def.description.
       const key = (schema as { description?: string }).description;

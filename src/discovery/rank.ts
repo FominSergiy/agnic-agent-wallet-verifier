@@ -112,7 +112,23 @@ export async function rankServices(
   let selection: RankedSelection | null = null;
   try {
     const prompt = buildPrompt(candidates.candidates, network);
-    selection = await llm.generateStructured(RankedSelectionSchema, prompt);
+    selection = await llm.generateStructured(RankedSelectionSchema, prompt, {
+      toolName: "select_services",
+      toolDescription:
+        "Select one best x402 service per category by emitting a selections " +
+        "array. Each entry: { category, resourceIndex, rationale }. Return " +
+        "ALL fields at the top level of the function arguments — do NOT wrap " +
+        "in any envelope.",
+      toolExample: {
+        selections: [
+          {
+            category: "sanctions",
+            resourceIndex: 0,
+            rationale: "Lowest price with broad OFAC SDN coverage.",
+          },
+        ],
+      },
+    });
   } catch (e) {
     console.warn("[rank] LLM rerank failed, falling back to quality-sort:", (e as Error).message);
   }
