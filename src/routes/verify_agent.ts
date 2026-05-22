@@ -22,6 +22,7 @@ verifyAgentRouter.post("/", zValidator("json", VerifyAgentRequestSchema), async 
     if (result.mode === "discovery") {
       return c.json({
         verdict: result.verdict,
+        synthesisError: result.synthesisError,
         plan: {
           services: result.plan.services.map((s) => ({
             category: s.category,

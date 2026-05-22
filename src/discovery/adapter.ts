@@ -11,6 +11,17 @@ export interface BuiltCall {
   body?: unknown;
 }
 
+export interface BuiltCallSet {
+  /** The primary call shape — what to try first. */
+  primary: BuiltCall;
+  /**
+   * Alternative POST body shapes to try if the primary call returns an
+   * upstream client error. Each entry is a fully-built call. Empty for
+   * GET requests or when the primary is the only reasonable shape.
+   */
+  fallbacks: BuiltCall[];
+}
+
 export class AdapterFailedError extends Error {
   constructor(public readonly reason: string, public readonly service: string) {
     super(`adapter failed for ${service}: ${reason}`);
@@ -81,7 +92,46 @@ function substituteAddressInBody(
   return { address, chain };
 }
 
+// Common POST body shapes we try when the primary {address, chain} body is
+// rejected. Ordered by observed catalog frequency. Each is a *function* of
+// (address, chain) so the same templates can be reused across services.
+function alternateBodyShapes(
+  address: string,
+  chain: Chain,
+): Array<Record<string, unknown>> {
+  return [
+    { wallet: address, chain },
+    { wallet: address },
+    { addr: address, chain },
+    { addresses: [address] },
+    { wallets: [address] },
+  ];
+}
+
 // --- pattern-match adapter -------------------------------------------------
+
+export function buildCallSetFromInfo(
+  service: RankedService,
+  address: string,
+  chain: Chain,
+): BuiltCallSet {
+  const primary = buildCallFromInfo(service, address, chain);
+  // Only POST gets fallback shapes — GET URLs are already built from explicit
+  // path/query templates and trying random param permutations is unlikely to
+  // help.
+  if (primary.method !== "POST") {
+    return { primary, fallbacks: [] };
+  }
+  const primaryBody = primary.body ?? {};
+  // De-dupe: skip any shape equivalent to the primary's body.
+  const primaryKey = JSON.stringify(primaryBody);
+  const fallbacks: BuiltCall[] = [];
+  for (const shape of alternateBodyShapes(address, chain)) {
+    if (JSON.stringify(shape) === primaryKey) continue;
+    fallbacks.push({ url: primary.url, method: "POST", body: shape });
+  }
+  return { primary, fallbacks };
+}
 
 export function buildCallFromInfo(
   service: RankedService,
@@ -173,11 +223,17 @@ Construct the request:
 `.trim();
 
   try {
-    const out = await llm.generateStructured(
-      BuiltCallSchema,
-      prompt,
-      FALLBACK_ADAPTER_MODEL,
-    );
+    const out = await llm.generateStructured(BuiltCallSchema, prompt, {
+      model: FALLBACK_ADAPTER_MODEL,
+      toolName: "build_http_call",
+      toolDescription:
+        "Construct the HTTP call to make to this x402 service. Return " +
+        "{ url, method, body? } as the top-level function arguments.",
+      toolExample: {
+        url: "https://api.example.com/v1/screen?wallet=0xexample",
+        method: "GET",
+      },
+    });
     return out;
   } catch (e) {
     throw new AdapterFailedError(

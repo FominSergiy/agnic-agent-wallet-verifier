@@ -4,6 +4,7 @@ import {
   AdapterFailedError,
   buildCallFromInfo,
   buildCallFromInfoViaLlm,
+  buildCallSetFromInfo,
 } from "./adapter.ts";
 import type { LlmClient } from "../agent/llm.ts";
 import type { BazaarInfo, RankedService } from "./types.ts";
@@ -136,6 +137,43 @@ Deno.test("buildCallFromInfo appends address as default param when GET has no pa
   assertEquals(built.url, `https://svc.example/v1/check?address=${encodeURIComponent(ADDR)}`);
 });
 
+Deno.test("buildCallSetFromInfo produces multiple POST shapes for POST services", () => {
+  const set = buildCallSetFromInfo(
+    svc({
+      resource: "https://post.example/v1",
+      inputInfo: { method: "POST", body: { address: "0xex", chain: "base" } },
+    }),
+    ADDR,
+    "base",
+  );
+  assertEquals(set.primary.method, "POST");
+  assertEquals(set.fallbacks.length > 0, true);
+  // Fallback bodies should not equal the primary body.
+  const primaryKey = JSON.stringify(set.primary.body);
+  for (const f of set.fallbacks) {
+    assertEquals(f.method, "POST");
+    assertEquals(JSON.stringify(f.body) !== primaryKey, true);
+    assertEquals(f.url, set.primary.url);
+  }
+  // Concrete shapes should be present.
+  const bodyJsons = set.fallbacks.map((f) => JSON.stringify(f.body));
+  assertEquals(bodyJsons.some((j) => j.includes('"wallet"')), true);
+  assertEquals(bodyJsons.some((j) => j.includes('"wallets"')), true);
+});
+
+Deno.test("buildCallSetFromInfo returns empty fallbacks for GET services", () => {
+  const set = buildCallSetFromInfo(
+    svc({
+      resource: "https://get.example/v1",
+      inputInfo: { method: "GET", queryParams: { wallet: "0xex" } },
+    }),
+    ADDR,
+    "base",
+  );
+  assertEquals(set.primary.method, "GET");
+  assertEquals(set.fallbacks, []);
+});
+
 // --- LLM fallback ---------------------------------------------------------
 
 Deno.test("buildCallFromInfoViaLlm uses LLM to construct args", async () => {
@@ -143,14 +181,22 @@ Deno.test("buildCallFromInfoViaLlm uses LLM to construct args", async () => {
     url: "https://svc.example/v1/screen?wallet=" + ADDR,
     method: "GET",
   };
-  const captured: { model?: string; promptHasAddress?: boolean } = {};
+  const captured: {
+    model?: string;
+    toolName?: string;
+    promptHasAddress?: boolean;
+  } = {};
   const llm: LlmClient = {
     generateStructured<T>(
       schema: z.ZodType<T>,
       prompt: string,
-      model?: string,
+      optsOrModel?: { model?: string; toolName?: string } | string,
     ): Promise<T> {
-      captured.model = model;
+      const opts = typeof optsOrModel === "string"
+        ? { model: optsOrModel }
+        : optsOrModel ?? {};
+      captured.model = opts.model;
+      captured.toolName = opts.toolName;
       captured.promptHasAddress = prompt.includes(ADDR);
       return Promise.resolve(schema.parse(fixture));
     },
@@ -164,8 +210,10 @@ Deno.test("buildCallFromInfoViaLlm uses LLM to construct args", async () => {
   assertEquals(built.url, fixture.url);
   assertEquals(built.method, "GET");
   assertEquals(captured.promptHasAddress, true);
-  // model is forwarded — should be a non-empty string identifier
+  // model is forwarded as opts.model
   assertEquals(typeof captured.model === "string" && captured.model.length > 0, true);
+  // toolName is forwarded
+  assertEquals(captured.toolName, "build_http_call");
 });
 
 Deno.test("buildCallFromInfoViaLlm throws AdapterFailedError when LLM throws", async () => {

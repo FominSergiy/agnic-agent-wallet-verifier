@@ -25,15 +25,23 @@ function inputWith(args: {
   };
 }
 
-function fixtureLlm(fixture: WalletVerdict, captured?: { model?: string; prompt?: string }): LlmClient {
+function fixtureLlm(
+  fixture: WalletVerdict,
+  captured?: { model?: string; prompt?: string; toolName?: string; hasExample?: boolean },
+): LlmClient {
   return {
     generateStructured<T>(
       schema: z.ZodType<T>,
       prompt: string,
-      model?: string,
+      optsOrModel?: { model?: string; toolName?: string; toolExample?: unknown } | string,
     ): Promise<T> {
+      const opts = typeof optsOrModel === "string"
+        ? { model: optsOrModel }
+        : optsOrModel ?? {};
       if (captured) {
-        captured.model = model;
+        captured.model = opts.model;
+        captured.toolName = opts.toolName;
+        captured.hasExample = (opts as { toolExample?: unknown }).toolExample !== undefined;
         captured.prompt = prompt;
       }
       return Promise.resolve(schema.parse(fixture));
@@ -80,17 +88,20 @@ const INSUFFICIENT_VERDICT: WalletVerdict = {
 };
 
 Deno.test("synthesizeVerdict passes Opus model id to llm.generateStructured", async () => {
-  const captured: { model?: string; prompt?: string } = {};
+  const captured: { model?: string; prompt?: string; toolName?: string; hasExample?: boolean } = {};
   const llm = fixtureLlm(SAFE_VERDICT, captured);
   await synthesizeVerdict(
     inputWith({ findings: {}, resolved: [] }),
     { llm },
   );
   assertEquals(captured.model, "anthropic/claude-opus-4.7");
+  // Strict tool envelope: descriptive tool name + example payload included.
+  assertEquals(captured.toolName, "submit_wallet_verdict");
+  assertEquals(captured.hasExample, true);
 });
 
 Deno.test("synthesizeVerdict honors model override via opts", async () => {
-  const captured: { model?: string; prompt?: string } = {};
+  const captured: { model?: string; prompt?: string; toolName?: string; hasExample?: boolean } = {};
   const llm = fixtureLlm(SAFE_VERDICT, captured);
   await synthesizeVerdict(
     inputWith({ findings: {}, resolved: [] }),

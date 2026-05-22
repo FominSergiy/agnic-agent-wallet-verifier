@@ -6,6 +6,34 @@ import type { Findings } from "./invoke_all.ts";
 
 const OPUS_MODEL = Deno.env.get("SYNTHESIS_MODEL") ?? "anthropic/claude-opus-4.7";
 
+// Placeholder values for the tool-call example. Opus produces more reliable
+// structured output when shown a concrete schema-conforming example.
+const VERDICT_EXAMPLE = {
+  address: "0x0000000000000000000000000000000000000000",
+  chain: "base",
+  safe: true,
+  verdict: "safe_to_transact",
+  confidence: "high",
+  headline:
+    "Safe to transact — wallet has clean sanctions screen and verified exchange labels.",
+  reasoning:
+    "Sanctions check returned no matches. Address is labeled as a known exchange hot wallet, and on-chain history shows 2+ years of active use.",
+  findings: [
+    {
+      category: "sanctions",
+      severity: "info",
+      finding: "No matches against OFAC SDN or other active sanctions lists.",
+    },
+  ],
+  coverage: {
+    requested: ["sanctions", "labels", "onchain_history"],
+    resolved: ["sanctions", "labels", "onchain_history"],
+    unresolved: [],
+  },
+  totalSpentUsdc: 0.011,
+  generatedAt: "2026-05-22T12:00:00.000Z",
+};
+
 export interface SynthesisInput {
   address: string;
   chain: Chain;
@@ -72,6 +100,29 @@ You MUST follow these per-signal weighting rules in order:
 Return ONLY the structured object that matches the schema.
 `.trim();
 
+// Findings from upstream services can be large (labels returns entity lists,
+// web_sentiment returns multi-page search hits). Cap per-category to keep the
+// prompt within Opus's working size — empirically large prompts trigger
+// "internal_error" upstream.
+const MAX_FINDING_CHARS = 3000;
+
+function truncateFindings(findings: Findings): Findings {
+  const out: Findings = {};
+  for (const [k, v] of Object.entries(findings)) {
+    const stringified = JSON.stringify(v);
+    if (stringified.length <= MAX_FINDING_CHARS) {
+      out[k as keyof Findings] = v;
+    } else {
+      out[k as keyof Findings] = {
+        __truncated: true,
+        __originalSize: stringified.length,
+        preview: stringified.slice(0, MAX_FINDING_CHARS) + "…[truncated]",
+      };
+    }
+  }
+  return out;
+}
+
 export async function synthesizeVerdict(
   input: SynthesisInput,
   opts: { llm?: LlmClient; model?: string } = {},
@@ -79,13 +130,24 @@ export async function synthesizeVerdict(
   const llm = opts.llm ?? defaultLlm;
   const model = opts.model ?? OPUS_MODEL;
 
+  const safeInput = { ...input, findings: truncateFindings(input.findings) };
+
   const prompt = `${PROMPT_PREAMBLE}
 
 Input:
-${JSON.stringify(input, null, 2)}
+${JSON.stringify(safeInput, null, 2)}
 
 The current ISO 8601 timestamp to use for generatedAt is: ${new Date().toISOString()}
 `.trim();
 
-  return await llm.generateStructured(WalletVerdictSchema, prompt, model);
+  return await llm.generateStructured(WalletVerdictSchema, prompt, {
+    model,
+    toolName: "submit_wallet_verdict",
+    toolDescription:
+      "Submit the final WalletVerdict object for this wallet. The arguments " +
+      "of THIS function call ARE the verdict — return all required fields " +
+      "(address, chain, safe, verdict, confidence, headline, reasoning, " +
+      "findings, coverage, totalSpentUsdc, generatedAt) at the top level.",
+    toolExample: VERDICT_EXAMPLE,
+  });
 }
