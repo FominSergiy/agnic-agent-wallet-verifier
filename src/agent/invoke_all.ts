@@ -12,6 +12,30 @@ import type { Category } from "./types.ts";
 // to burn time/money exhaustively probing dead services.
 const MAX_ALTERNATES_PER_CATEGORY = 2;
 
+// When an upstream error matches one of these patterns, treat the failure as
+// host-level (the entire domain is dead / non-x402) and skip subsequent
+// alternates from the same host. Saves a wasted LLM-adapter call + agnicFetch
+// roundtrip per skipped sibling.
+const DOMAIN_LEVEL_ERROR_PATTERNS = [
+  /Target API is not X402 enabled/i,
+  /\bNot Found\b/i,
+  /\bDNS\b/i,
+  /upstream_404/i,
+];
+
+function hostOf(url: string): string {
+  try {
+    return new URL(url).host;
+  } catch {
+    return url;
+  }
+}
+
+function isDomainLevelError(message: string | undefined): boolean {
+  if (!message) return false;
+  return DOMAIN_LEVEL_ERROR_PATTERNS.some((re) => re.test(message));
+}
+
 export type Findings = Partial<Record<Category, unknown>>;
 
 export interface InvokeAllResult {
@@ -49,9 +73,17 @@ async function invokeWithAlternates(
   llm?: LlmClient,
 ): Promise<ServiceInvocationOutcome> {
   const candidates = [primary, ...alternates.slice(0, MAX_ALTERNATES_PER_CATEGORY)];
+  const failedHosts = new Set<string>();
   let lastOutcome: ServiceInvocationOutcome | null = null;
   for (let i = 0; i < candidates.length; i++) {
     const svc = candidates[i];
+    const host = hostOf(svc.resource);
+    if (failedHosts.has(host)) {
+      console.warn(
+        `[invoke] skipping ${svc.resource} — host ${host} already failed with domain-level error`,
+      );
+      continue;
+    }
     const outcome = await invoker(svc, address, chain, { llm });
     if (outcome.status === "ok" || outcome.status === "fallback_ok") {
       if (i > 0) {
@@ -62,6 +94,9 @@ async function invokeWithAlternates(
       return outcome;
     }
     lastOutcome = outcome;
+    if (isDomainLevelError(outcome.error)) {
+      failedHosts.add(host);
+    }
     if (i < candidates.length - 1) {
       console.warn(
         `[invoke] ${primary.category}: ${svc.resource} errored (${outcome.error}); trying next alternate`,

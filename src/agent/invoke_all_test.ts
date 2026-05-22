@@ -159,6 +159,102 @@ Deno.test("invokeAll proceeds when sanctions is absent from plan", async () => {
   }
 });
 
+Deno.test("invokeAll skips same-host alternates after domain-level error", async () => {
+  // Primary + 2 alternates all on the same host.
+  const services = [svc("onchain_history", "https://orbisapi.com/proxy/v1/main")];
+  const planWithAlts: DiscoveryPlan = {
+    ...plan(services),
+    alternates: {
+      onchain_history: [
+        svc("onchain_history", "https://orbisapi.com/proxy/v1/balance"),
+        svc("onchain_history", "https://orbisapi.com/proxy/v1/tokens"),
+      ],
+    },
+  };
+  const calls: string[] = [];
+  const invoker = (s: RankedService) => {
+    calls.push(s.resource);
+    return Promise.resolve({
+      category: s.category,
+      resource: s.resource,
+      data: null,
+      status: "error" as const,
+      error: "agnicFetch [Target API is not X402 enabled]: Bad Request",
+      amountUsdc: 0,
+      durationMs: 5,
+      paid: false,
+      network: null,
+      adapterPath: "pattern" as const,
+    });
+  };
+  // Sanctions has to be present + ok or invokeAll throws — supply a stub.
+  const planFull: DiscoveryPlan = {
+    ...planWithAlts,
+    services: [
+      svc("sanctions", "https://sanc.example"),
+      ...services,
+    ],
+  };
+  await invokeAll(planFull, "base", {
+    invoker: (s) => {
+      if (s.category === "sanctions") return Promise.resolve(okOutcome("sanctions", { ok: true }));
+      return invoker(s);
+    },
+  });
+  // Only the primary should have been called for onchain — alternates skipped.
+  assertEquals(calls.length, 1);
+  assertEquals(calls[0], "https://orbisapi.com/proxy/v1/main");
+});
+
+Deno.test("invokeAll still tries different-host alternates after domain-level error", async () => {
+  const services = [svc("onchain_history", "https://orbisapi.com/proxy/v1/main")];
+  const planWithAlts: DiscoveryPlan = {
+    ...plan([svc("sanctions", "https://sanc.example"), ...services]),
+    alternates: {
+      onchain_history: [
+        svc("onchain_history", "https://orbisapi.com/proxy/v1/balance"), // same host — skip
+        svc("onchain_history", "https://other-provider.example/onchain"), // different host — try
+      ],
+    },
+  };
+  const calls: string[] = [];
+  const invoker = (s: RankedService) => {
+    calls.push(s.resource);
+    if (s.category === "sanctions") return Promise.resolve(okOutcome("sanctions", { ok: true }));
+    if (s.resource.includes("other-provider")) {
+      return Promise.resolve(okOutcome("onchain_history", { txCount: 5 }));
+    }
+    return Promise.resolve({
+      category: s.category,
+      resource: s.resource,
+      data: null,
+      status: "error" as const,
+      error: "agnicFetch [Target API is not X402 enabled]: Bad Request",
+      amountUsdc: 0,
+      durationMs: 5,
+      paid: false,
+      network: null,
+      adapterPath: "pattern" as const,
+    });
+  };
+  const r = await invokeAll(planWithAlts, "base", { invoker });
+  // Primary on orbisapi → error. Same-host alt skipped. Different-host alt → success.
+  assertEquals(
+    calls.includes("https://orbisapi.com/proxy/v1/main"),
+    true,
+  );
+  assertEquals(
+    calls.includes("https://orbisapi.com/proxy/v1/balance"),
+    false,
+    "same-host alt should be skipped",
+  );
+  assertEquals(
+    calls.includes("https://other-provider.example/onchain"),
+    true,
+  );
+  assertEquals(r.findings.onchain_history, { txCount: 5 });
+});
+
 Deno.test("invokeAll echoes walletNetwork in result", async () => {
   const services = [svc("sanctions", "https://s")];
   const r = await invokeAll(plan(services), "base", {
