@@ -1,0 +1,169 @@
+{
+  "test": {
+    "address": "0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045",
+    "chain": "eth",
+    "label": "Vitalik's main wallet (vitalik.eth)",
+    "category": "Safe / ENS-doxxed (EOA)",
+    "expected": "safe_to_transact",
+    "sourceUrl": "https://etherscan.io/address/0xd8da6bf26964af9d7eed9e03e53415d37aa96045"
+  },
+  "metrics": {
+    "address": "0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045",
+    "label": "Vitalik's main wallet (vitalik.eth)",
+    "expected": "safe_to_transact",
+    "actualVerdict": "safe_to_transact",
+    "actualConfidence": "high",
+    "verdictMatch": "match",
+    "match": true,
+    "primaryHits": 3,
+    "alternateRescues": 0,
+    "llmAdapterCount": 1,
+    "hardErrors": 1,
+    "errorMessages": [
+      "[web_sentiment] agnicFetch [non_json_response]: HTTP 404 Not Found returned non-JSON body (<!DOCTYPE html> <html lang=\"en\"> <head> <meta charset=\"utf-8\"> <title>Error</title> </head> <body> <pre>Cannot POST /wallet-address-risk/:endpoint</pre> </body> </html>)"
+    ],
+    "totalSpentUsdc": 0.009899999999999999,
+    "latencyMs": 135645.152791,
+    "resolved": [
+      "sanctions",
+      "labels",
+      "onchain_history",
+      "ens"
+    ],
+    "unresolved": [
+      "web_sentiment"
+    ],
+    "httpStatus": 200
+  },
+  "raw": {
+    "verdict": {
+      "address": "0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045",
+      "chain": "eth",
+      "safe": true,
+      "verdict": "safe_to_transact",
+      "confidence": "high",
+      "headline": "Safe to transact — wallet is publicly doxxed as vitalik.eth and passes all sanctions checks.",
+      "reasoning": "Both sanctions sources (Chainalysis on-chain oracle and the x402 sanctions service) returned clean results, satisfying the most important screening requirement. The wallet resolves via ENS to vitalik.eth, a strong public identity attribution comparable to a known-safe label. On-chain history shows a healthy non-zero balance (~5.68 ETH) on a well-known long-lived address, providing additional positive supporting evidence. Web sentiment was unresolved and contract analysis is not applicable (EOA), but these do not undermine the strong positives.",
+      "findings": [
+        {
+          "category": "sanctions",
+          "severity": "info",
+          "finding": "Chainalysis on-chain oracle reports isSanctioned=false and x402 sanctions service returned no matches — wallet is sanctions-clean."
+        },
+        {
+          "category": "ens",
+          "severity": "info",
+          "finding": "ENS reverse lookup resolves to vitalik.eth — wallet is publicly doxxed to a well-known identity."
+        },
+        {
+          "category": "labels",
+          "severity": "info",
+          "finding": "Neither the x402 labeler nor the eth-labels registry returned any negative attributions; no scam/mixer/exploit tags present."
+        },
+        {
+          "category": "onchain_history",
+          "severity": "info",
+          "finding": "Address holds ~5.68 ETH balance on a long-established, widely-known wallet — consistent with legitimate activity."
+        },
+        {
+          "category": "web_sentiment",
+          "severity": "info",
+          "finding": "Web sentiment search was unresolved; no negative press surfaced (treated as neutral)."
+        }
+      ],
+      "coverage": {
+        "requested": [
+          "sanctions",
+          "labels",
+          "onchain_history",
+          "web_sentiment",
+          "ens"
+        ],
+        "resolved": [
+          "sanctions",
+          "labels",
+          "onchain_history",
+          "ens"
+        ],
+        "unresolved": [
+          "web_sentiment"
+        ],
+        "not_applicable": [
+          "contract_analysis"
+        ]
+      },
+      "totalSpentUsdc": 0.009899999999999999,
+      "generatedAt": "2026-05-23T22:03:46.821Z"
+    },
+    "plan": {
+      "services": [
+        {
+          "category": "sanctions",
+          "resource": "https://api.anchor-x402.com/v1/screen",
+          "priceUsdc": 0.001,
+          "rationale": "All candidates have unknown failure rate and quality; resource 0 (anchor-x402) ties resource 1 on price ($0.001) and completeness (2/3) but uses a more purpose-built dedicated domain, and both beat all other candidates on price and completeness — resource 0 is preferred as the cleaner named endpoint over the raw AWS API Gateway URL of resource 1."
+        },
+        {
+          "category": "labels",
+          "resource": "https://orbisapi.com/proxy/crypto-address-labeler-api-79be80",
+          "priceUsdc": 0.005,
+          "rationale": "All candidates share unknown failure rate and quality; resource 1 has a description that directly matches label/entity classification ('exchange, mixer, contract or known entity') at the lowest non-cluster price ($0.005), and completeness is equal across most options — the entity-attribution hint on the cluster candidates (2/3/5) is a soft signal that doesn't override the clearer labeling intent of resource 1."
+        },
+        {
+          "category": "onchain_history",
+          "resource": "https://orbisapi.com/proxy/wallet-api-5f3267/balance/:address",
+          "priceUsdc": 0.0039,
+          "rationale": "Resource 1 is the only candidate tied for lowest price ($0.0039) while also achieving inputInfoCompleteness 2/3 (method + params documented), making it the strongest choice when all failure rates and quality scores are unknown."
+        },
+        {
+          "category": "web_sentiment",
+          "resource": "https://orbisapi.com/proxy/wallet-address-risk-api-c6680c/:endpoint",
+          "priceUsdc": 0.007,
+          "rationale": "No candidate explicitly describes web/social sentiment, so selecting the best-fit risk/reputation option; resource 1 is chosen over resource 0 (same underlying API) because its 2/3 completeness score better documents the input shape, reducing call-failure risk."
+        }
+      ]
+    },
+    "receipts": [
+      {
+        "category": "sanctions",
+        "resource": "https://api.anchor-x402.com/v1/screen",
+        "status": "ok",
+        "adapterPath": "pattern",
+        "amountUsdc": 0.001,
+        "durationMs": 3144,
+        "paid": true
+      },
+      {
+        "category": "labels",
+        "resource": "https://orbisapi.com/proxy/crypto-address-labeler-api-79be80",
+        "status": "ok",
+        "adapterPath": "pattern+subpath",
+        "amountUsdc": 0.005,
+        "durationMs": 59126,
+        "paid": true
+      },
+      {
+        "category": "onchain_history",
+        "resource": "https://orbisapi.com/proxy/wallet-api-5f3267/balance/:address",
+        "status": "ok",
+        "adapterPath": "pattern",
+        "amountUsdc": 0.0039,
+        "durationMs": 26389,
+        "paid": true
+      },
+      {
+        "category": "web_sentiment",
+        "resource": "https://orbisapi.com/proxy/wallet-address-risk-api-c6680c/:endpoint",
+        "status": "error",
+        "adapterPath": "llm",
+        "amountUsdc": 0,
+        "durationMs": 104317,
+        "paid": false,
+        "error": "agnicFetch [non_json_response]: HTTP 404 Not Found returned non-JSON body (<!DOCTYPE html> <html lang=\"en\"> <head> <meta charset=\"utf-8\"> <title>Error</title> </head> <body> <pre>Cannot POST /wallet-address-risk/:endpoint</pre> </body> </html>)",
+        "errorCode": "non_json_response"
+      }
+    ],
+    "walletNetwork": "base",
+    "totalSpentUsdc": 0.009899999999999999
+  }
+}

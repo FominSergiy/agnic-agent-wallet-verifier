@@ -3,6 +3,7 @@ import { verifyAgent } from "./verify.ts";
 import type { VerifyEvent } from "./events.ts";
 import type { OracleResult } from "./sanctions_oracle.ts";
 import type { EnsResolution } from "./ens_resolver.ts";
+import type { RegistryResult } from "./labels_registry.ts";
 
 function ensNull(): () => Promise<EnsResolution> {
   return () =>
@@ -482,6 +483,176 @@ Deno.test("verifyAgent treats ENS resolver failure as silent (no verdict impact)
   const findings = (synthesisInput as { findings: { ens?: unknown } }).findings;
   // ENS finding is absent when the resolver throws — not corrupted, not stubbed.
   assertEquals(findings.ens, undefined);
+});
+
+function registryHit(
+  labels: RegistryResult["labels"],
+): () => Promise<RegistryResult> {
+  return () =>
+    Promise.resolve({
+      source: "eth_labels_registry",
+      endpoint: "https://eth-labels.com/labels/0xtest",
+      address: "0xtest",
+      chain: "eth",
+      labels,
+      checkedAt: new Date().toISOString(),
+    });
+}
+
+Deno.test("registry_merges_into_findings_labels_when_x402_succeeds", async () => {
+  let synthesisInput: unknown = null;
+  await verifyAgent(
+    { address: "0x71660c4005BA85c37ccec55d0C4493E66Fe775d3", chain: "eth" },
+    {
+      _testHooks: {
+        checkSanctionsOracle: cleanOracle(),
+        resolveEns: ensNull(),
+        isContract: () => Promise.resolve(false),
+        fetchLabelsRegistry: registryHit([
+          {
+            address: "0x71660c4005ba85c37ccec55d0c4493e66fe775d3",
+            chainId: 1,
+            label: "coinbase",
+            nameTag: "Coinbase 1",
+          },
+        ]),
+        discover: () => Promise.resolve(fakePlan()),
+        invokeAll: () =>
+          Promise.resolve({
+            findings: { labels: { some_x402_payload: true } },
+            outcomes: [],
+            unresolved: [],
+            totalSpentUsdc: 0,
+            walletNetwork: "base" as const,
+          }),
+        synthesizeVerdict: (input) => {
+          synthesisInput = input;
+          return Promise.resolve(fakeVerdict());
+        },
+      },
+    },
+  );
+  const labels =
+    (synthesisInput as { findings: { labels: Record<string, unknown> } })
+      .findings.labels;
+  // Merged shape: both keys present.
+  assertEquals("x402_result" in labels, true);
+  assertEquals("registry" in labels, true);
+  const reg = labels.registry as RegistryResult;
+  assertEquals(reg.labels[0].label, "coinbase");
+});
+
+Deno.test("registry_rescues_labels_when_x402_fails", async () => {
+  let synthesisInput: unknown = null;
+  await verifyAgent(
+    { address: "0x71660c4005BA85c37ccec55d0C4493E66Fe775d3", chain: "eth" },
+    {
+      _testHooks: {
+        checkSanctionsOracle: cleanOracle(),
+        resolveEns: ensNull(),
+        isContract: () => Promise.resolve(false),
+        fetchLabelsRegistry: registryHit([
+          {
+            address: "0x71660c4005ba85c37ccec55d0c4493e66fe775d3",
+            chainId: 1,
+            label: "coinbase",
+            nameTag: "Coinbase 1",
+          },
+        ]),
+        discover: () => Promise.resolve(fakePlan()),
+        invokeAll: () =>
+          Promise.resolve({
+            findings: {},
+            outcomes: [],
+            unresolved: ["labels"],
+            totalSpentUsdc: 0,
+            walletNetwork: "base" as const,
+          }),
+        synthesizeVerdict: (input) => {
+          synthesisInput = input;
+          return Promise.resolve(fakeVerdict());
+        },
+      },
+    },
+  );
+  const findings =
+    (synthesisInput as { findings: { labels?: Record<string, unknown> } })
+      .findings;
+  // findings.labels exists with only the registry key — no x402_result wrapper.
+  assertEquals(findings.labels !== undefined, true);
+  assertEquals("registry" in (findings.labels ?? {}), true);
+  assertEquals("x402_result" in (findings.labels ?? {}), false);
+  // Coverage should no longer mark labels as unresolved.
+  const cov =
+    (synthesisInput as { coverage: { unresolved: string[]; resolved: string[] } })
+      .coverage;
+  assertEquals(cov.unresolved.includes("labels"), false);
+  assertEquals(cov.resolved.includes("labels"), true);
+});
+
+Deno.test("registry_failure_is_swallowed_and_does_not_block_verdict", async () => {
+  let synthesisInput: unknown = null;
+  const r = await verifyAgent(
+    { address: "0x71660c4005BA85c37ccec55d0C4493E66Fe775d3", chain: "eth" },
+    {
+      _testHooks: {
+        checkSanctionsOracle: cleanOracle(),
+        resolveEns: ensNull(),
+        isContract: () => Promise.resolve(false),
+        fetchLabelsRegistry: () =>
+          Promise.reject(new Error("eth-labels DNS failure")),
+        discover: () => Promise.resolve(fakePlan()),
+        invokeAll: () =>
+          Promise.resolve({
+            findings: { labels: { some_x402_payload: true } },
+            outcomes: [],
+            unresolved: [],
+            totalSpentUsdc: 0,
+            walletNetwork: "base" as const,
+          }),
+        synthesizeVerdict: (input) => {
+          synthesisInput = input;
+          return Promise.resolve(fakeVerdict());
+        },
+      },
+    },
+  );
+  assertEquals(r.verdict.verdict, "safe_to_transact");
+  const labels =
+    (synthesisInput as { findings: { labels: Record<string, unknown> } })
+      .findings.labels;
+  // Original x402 payload survives untouched — no wrapper.
+  assertEquals(labels, { some_x402_payload: true });
+});
+
+Deno.test("registry_skipped_when_labels_category_not_requested", async () => {
+  let registryCalled = false;
+  await verifyAgent(
+    { address: "0xABC0000000000000000000000000000000000123", chain: "base" },
+    {
+      categories: ["sanctions"],
+      _testHooks: {
+        checkSanctionsOracle: cleanOracle(),
+        isContract: () => Promise.resolve(false),
+        fetchLabelsRegistry: () => {
+          registryCalled = true;
+          return Promise.resolve({
+            source: "eth_labels_registry",
+            endpoint: "x",
+            address: "x",
+            chain: "base",
+            labels: [],
+            checkedAt: new Date().toISOString(),
+          });
+        },
+        discover: () => Promise.resolve(fakePlan()),
+        // deno-lint-ignore no-explicit-any
+        invokeAll: () => Promise.resolve(fakeInvocation() as any),
+        synthesizeVerdict: () => Promise.resolve(fakeVerdict()),
+      },
+    },
+  );
+  assertEquals(registryCalled, false);
 });
 
 Deno.test("verifyAgent onEvent thrown by consumer does not crash verifyAgent", async () => {
