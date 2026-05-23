@@ -1,0 +1,163 @@
+{
+  "test": {
+    "address": "0x71660c4005BA85c37ccec55d0C4493E66Fe775d3",
+    "chain": "eth",
+    "label": "Coinbase 1 hot wallet",
+    "category": "Verified exchange (EOA)",
+    "expected": "safe_to_transact",
+    "sourceUrl": "https://etherscan.io/address/0x71660c4005ba85c37ccec55d0c4493e66fe775d3"
+  },
+  "metrics": {
+    "address": "0x71660c4005BA85c37ccec55d0C4493E66Fe775d3",
+    "label": "Coinbase 1 hot wallet",
+    "expected": "safe_to_transact",
+    "actualVerdict": "safe_to_transact",
+    "actualConfidence": "high",
+    "verdictMatch": "match",
+    "match": true,
+    "primaryHits": 4,
+    "alternateRescues": 0,
+    "llmAdapterCount": 0,
+    "hardErrors": 0,
+    "errorMessages": [],
+    "totalSpentUsdc": 0.0109,
+    "latencyMs": 38096.35812500003,
+    "resolved": [
+      "sanctions",
+      "labels",
+      "onchain_history",
+      "web_sentiment",
+      "ens"
+    ],
+    "unresolved": [],
+    "httpStatus": 200
+  },
+  "raw": {
+    "verdict": {
+      "address": "0x71660c4005BA85c37ccec55d0C4493E66Fe775d3",
+      "chain": "eth",
+      "safe": true,
+      "verdict": "safe_to_transact",
+      "confidence": "high",
+      "headline": "Safe to transact — this is a labeled Coinbase exchange hot wallet with a clean sanctions screen.",
+      "reasoning": "The Chainalysis on-chain oracle and the x402 sanctions service both return clean (no SDN/sanctions match). The eth-labels registry attributes this address to \"Coinbase 1\" with labels \"coinbase\" and \"fiat-gateway\" — a major, well-known centralized exchange hot wallet, which is strong positive attribution. On-chain history shows a healthy ~11.08 ETH balance consistent with an active exchange wallet, and no negative web sentiment or contract risk applies (EOA). With multiple independent positive signals and no negatives, confidence is high.",
+      "findings": [
+        {
+          "category": "sanctions",
+          "severity": "info",
+          "finding": "Chainalysis on-chain oracle reports isSanctioned=false; x402 sanctions service also returns no matches (risk_level: low)."
+        },
+        {
+          "category": "labels",
+          "severity": "info",
+          "finding": "eth-labels registry identifies this address as 'Coinbase 1' with labels 'coinbase' and 'fiat-gateway' — a major CEX hot wallet."
+        },
+        {
+          "category": "onchain_history",
+          "severity": "info",
+          "finding": "Active wallet holding ~11.078 ETH, consistent with an exchange operational wallet."
+        },
+        {
+          "category": "ens",
+          "severity": "info",
+          "finding": "No ENS reverse record (neutral; CEX hot wallets typically do not set ENS)."
+        },
+        {
+          "category": "web_sentiment",
+          "severity": "info",
+          "finding": "No adverse web sentiment hits returned."
+        }
+      ],
+      "coverage": {
+        "requested": [
+          "sanctions",
+          "labels",
+          "onchain_history",
+          "web_sentiment",
+          "ens"
+        ],
+        "resolved": [
+          "sanctions",
+          "labels",
+          "onchain_history",
+          "web_sentiment",
+          "ens"
+        ],
+        "unresolved": [],
+        "not_applicable": [
+          "contract_analysis"
+        ]
+      },
+      "totalSpentUsdc": 0.0109,
+      "generatedAt": "2026-05-23T22:12:03.769Z"
+    },
+    "plan": {
+      "services": [
+        {
+          "category": "sanctions",
+          "resource": "https://api.anchor-x402.com/v1/screen",
+          "priceUsdc": 0.001,
+          "rationale": "Resource 0 has a 0% recent failure rate and inputInfoCompleteness of 2/3, making it the strongest candidate; tied on price with resource 1 but resource 1 is untested, and resource 4 (100% failure) is excluded."
+        },
+        {
+          "category": "labels",
+          "resource": "https://orbisapi.com/proxy/crypto-address-labeler-api-79be80",
+          "priceUsdc": 0.005,
+          "rationale": "Resource 1 is the only labels candidate with a confirmed 0% failure rate, which is the strongest signal; the soft entity-attribution preference for cluster-score candidates does not override this real-world performance advantage."
+        },
+        {
+          "category": "onchain_history",
+          "resource": "https://orbisapi.com/proxy/wallet-api-5f3267/balance/:address",
+          "priceUsdc": 0.0039,
+          "rationale": "Resource 1 is the only onchain_history candidate with a confirmed 0% failure rate combined with inputInfoCompleteness of 2/3, making it clearly the best choice."
+        },
+        {
+          "category": "web_sentiment",
+          "resource": "https://orbisapi.com/proxy/wallet-address-risk-api-c6680c",
+          "priceUsdc": 0.001,
+          "rationale": "Resource 0 has a confirmed 0% failure rate; resource 1 (100% failure) is excluded, and resources 2–3 are untested, making resource 0 the clear winner despite lower completeness."
+        }
+      ]
+    },
+    "receipts": [
+      {
+        "category": "sanctions",
+        "resource": "https://api.anchor-x402.com/v1/screen",
+        "status": "ok",
+        "adapterPath": "pattern",
+        "amountUsdc": 0.001,
+        "durationMs": 3788,
+        "paid": true
+      },
+      {
+        "category": "labels",
+        "resource": "https://orbisapi.com/proxy/crypto-address-labeler-api-79be80",
+        "status": "ok",
+        "adapterPath": "pattern+subpath",
+        "amountUsdc": 0.005,
+        "durationMs": 12184,
+        "paid": true
+      },
+      {
+        "category": "onchain_history",
+        "resource": "https://orbisapi.com/proxy/wallet-api-5f3267/balance/:address",
+        "status": "ok",
+        "adapterPath": "pattern",
+        "amountUsdc": 0.0039,
+        "durationMs": 3173,
+        "paid": true
+      },
+      {
+        "category": "web_sentiment",
+        "resource": "https://orbisapi.com/proxy/wallet-address-risk-api-c6680c",
+        "status": "ok",
+        "adapterPath": "pattern",
+        "amountUsdc": 0.001,
+        "durationMs": 3173,
+        "paid": true
+      }
+    ],
+    "walletNetwork": "base",
+    "totalSpentUsdc": 0.0109
+  }
+}

@@ -15,6 +15,7 @@ import {
   type OracleResult,
 } from "./sanctions_oracle.ts";
 import { ensSupportedFor, resolveEns } from "./ens_resolver.ts";
+import { fetchLabelsRegistry } from "./labels_registry.ts";
 
 // Categories that only produce signal for contract addresses. Dropped early
 // for EOAs so we don't burn $0.005 on a smart-contract auditor that returns
@@ -59,6 +60,7 @@ export interface VerifyAgentOpts {
     isContract?: typeof isContract;
     checkSanctionsOracle?: typeof checkSanctionsOracle;
     resolveEns?: typeof resolveEns;
+    fetchLabelsRegistry?: typeof fetchLabelsRegistry;
   };
 }
 
@@ -149,6 +151,7 @@ export async function verifyAgent(
   const isContractFn = hooks.isContract ?? isContract;
   const oracleCheckFn = hooks.checkSanctionsOracle ?? checkSanctionsOracle;
   const ensResolveFn = hooks.resolveEns ?? resolveEns;
+  const labelsRegistryFn = hooks.fetchLabelsRegistry ?? fetchLabelsRegistry;
 
   // EOA short-circuit: drop contract-only categories when the address has no
   // deployed bytecode. Tracked separately as `not_applicable` so the verdict's
@@ -263,11 +266,13 @@ export async function verifyAgent(
   safeEmit(emit, { type: "phase", phase: "discover", status: "end", at: now() });
 
   safeEmit(emit, { type: "phase", phase: "invoke", status: "start", at: now() });
-  // Run x402 invocation and the ENS chain-primitive resolver in parallel —
-  // they're independent. ENS failures are silent (set to null) since ENS is
-  // a confirmatory signal, not a gate.
+  // Run x402 invocation, the ENS chain-primitive resolver, and the
+  // hardcoded eth-labels.com registry supplement in parallel — all three
+  // are independent. ENS + registry failures are silent (resolved as null)
+  // since they're supplementary signals, not gates.
   const wantEns = categories.includes("ens");
-  const [invocation, ensSettled] = await Promise.all([
+  const wantLabels = categories.includes("labels");
+  const [invocation, ensSettled, registrySettled] = await Promise.all([
     invokeAllFn(plan, req.chain, { llm, onEvent: emit }),
     wantEns
       ? ensResolveFn(req.address, req.chain).catch((e: Error) => {
@@ -277,8 +282,39 @@ export async function verifyAgent(
         return null;
       })
       : Promise.resolve(null),
+    wantLabels
+      ? labelsRegistryFn(req.address, req.chain).catch((e: Error) => {
+        console.warn(
+          `[verify-agent] eth-labels registry lookup failed (proceeding): ${e.message}`,
+        );
+        safeEmit(emit, {
+          type: "log",
+          level: "warn",
+          message: `labels_registry_failed: ${e.message}`,
+          at: now(),
+        });
+        return null;
+      })
+      : Promise.resolve(null),
   ]);
   safeEmit(emit, { type: "phase", phase: "invoke", status: "end", at: now() });
+
+  if (wantLabels && registrySettled !== null) {
+    safeEmit(emit, {
+      type: "log",
+      level: "info",
+      message:
+        `labels_registry: hits=${registrySettled.labels.length} (endpoint=${registrySettled.endpoint})`,
+      at: now(),
+    });
+    const prior = invocation.findings.labels;
+    invocation.findings.labels = prior !== undefined
+      ? { x402_result: prior, registry: registrySettled }
+      : { registry: registrySettled };
+    // If x402 labels failed but the registry succeeded, the category is
+    // no longer unresolved — synthesis has usable data.
+    invocation.unresolved = invocation.unresolved.filter((c) => c !== "labels");
+  }
 
   // Merge oracle-clean evidence into the sanctions finding so synthesis can
   // weigh it as a strong positive signal alongside any x402 sanctions result.

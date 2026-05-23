@@ -1,0 +1,163 @@
+{
+  "test": {
+    "address": "0xAaBbCcDdEeFf00112233445566778899AaBbCcDd",
+    "chain": "eth",
+    "label": "Synthetic fresh wallet (no history)",
+    "category": "Unknown / brand-new (EOA)",
+    "expected": "insufficient_data",
+    "sourceUrl": "n/a — synthetic checksum address with no on-chain history"
+  },
+  "metrics": {
+    "address": "0xAaBbCcDdEeFf00112233445566778899AaBbCcDd",
+    "label": "Synthetic fresh wallet (no history)",
+    "expected": "insufficient_data",
+    "actualVerdict": "insufficient_data",
+    "actualConfidence": "low",
+    "verdictMatch": "match",
+    "match": true,
+    "primaryHits": 4,
+    "alternateRescues": 0,
+    "llmAdapterCount": 0,
+    "hardErrors": 0,
+    "errorMessages": [],
+    "totalSpentUsdc": 0.0109,
+    "latencyMs": 33563.140625,
+    "resolved": [
+      "sanctions",
+      "labels",
+      "onchain_history",
+      "web_sentiment",
+      "ens"
+    ],
+    "unresolved": [],
+    "httpStatus": 200
+  },
+  "raw": {
+    "verdict": {
+      "address": "0xAaBbCcDdEeFf00112233445566778899AaBbCcDd",
+      "chain": "eth",
+      "safe": false,
+      "verdict": "insufficient_data",
+      "confidence": "low",
+      "headline": "Insufficient data — sanctions are clean but the wallet has no labels, no ENS, no balance, and no observable history.",
+      "reasoning": "The sanctions check returned no matches, which is a positive signal, but every other category is essentially empty: the labeler has no attribution, there is no ENS reverse record, the on-chain balance is zero, and web sentiment returned no substantive content. With only one usable positive signal (sanctions-clean) and no corroborating identity, label, or history evidence, there is not enough information to affirmatively recommend sending funds. This is the classic \"unknown wallet\" case — not provably bad, but not verifiable as safe either.",
+      "findings": [
+        {
+          "category": "sanctions",
+          "severity": "info",
+          "finding": "No matches against active sanctions lists (risk_level: low)."
+        },
+        {
+          "category": "labels",
+          "severity": "low",
+          "finding": "No known label or entity attribution from the labeler; entity_type is unknown."
+        },
+        {
+          "category": "onchain_history",
+          "severity": "low",
+          "finding": "Wallet balance is 0 ETH; no transaction history evidence was returned to support reputation."
+        },
+        {
+          "category": "web_sentiment",
+          "severity": "info",
+          "finding": "No adverse web mentions surfaced; provider returned only a health/info payload."
+        },
+        {
+          "category": "ens",
+          "severity": "low",
+          "finding": "No ENS reverse record — wallet is not publicly doxxed to a human-readable identity."
+        }
+      ],
+      "coverage": {
+        "requested": [
+          "sanctions",
+          "labels",
+          "onchain_history",
+          "web_sentiment",
+          "ens"
+        ],
+        "resolved": [
+          "sanctions",
+          "labels",
+          "onchain_history",
+          "web_sentiment",
+          "ens"
+        ],
+        "unresolved": [],
+        "not_applicable": [
+          "contract_analysis"
+        ]
+      },
+      "totalSpentUsdc": 0.0109,
+      "generatedAt": "2026-05-23T22:19:51.413Z"
+    },
+    "plan": {
+      "services": [
+        {
+          "category": "sanctions",
+          "resource": "https://api.anchor-x402.com/v1/screen",
+          "priceUsdc": 0.001,
+          "rationale": "Resource 0 has a 0% recent failure rate and inputInfoCompleteness of 2/3, making it the strongest performer; it also ties on price with the only other 0%-failure candidate (resource 2) but edges it out on completeness."
+        },
+        {
+          "category": "labels",
+          "resource": "https://orbisapi.com/proxy/crypto-address-labeler-api-79be80",
+          "priceUsdc": 0.005,
+          "rationale": "Resource 1 is the only labels candidate with a confirmed 0% recent failure rate, which is the strongest signal, and its description clearly matches address labeling intent."
+        },
+        {
+          "category": "onchain_history",
+          "resource": "https://orbisapi.com/proxy/wallet-api-5f3267/balance/:address",
+          "priceUsdc": 0.0039,
+          "rationale": "Resource 1 is the only onchain_history candidate with a confirmed 0% recent failure rate combined with inputInfoCompleteness of 2/3, making it the clear pick."
+        },
+        {
+          "category": "web_sentiment",
+          "resource": "https://orbisapi.com/proxy/wallet-address-risk-api-c6680c",
+          "priceUsdc": 0.001,
+          "rationale": "Resource 0 has a 0% recent failure rate versus resource 1's 100% and the untested status of others, making it the only safe choice despite modest completeness."
+        }
+      ]
+    },
+    "receipts": [
+      {
+        "category": "sanctions",
+        "resource": "https://api.anchor-x402.com/v1/screen",
+        "status": "ok",
+        "adapterPath": "pattern",
+        "amountUsdc": 0.001,
+        "durationMs": 3107,
+        "paid": true
+      },
+      {
+        "category": "labels",
+        "resource": "https://orbisapi.com/proxy/crypto-address-labeler-api-79be80",
+        "status": "ok",
+        "adapterPath": "pattern+subpath",
+        "amountUsdc": 0.005,
+        "durationMs": 7728,
+        "paid": true
+      },
+      {
+        "category": "onchain_history",
+        "resource": "https://orbisapi.com/proxy/wallet-api-5f3267/balance/:address",
+        "status": "ok",
+        "adapterPath": "pattern",
+        "amountUsdc": 0.0039,
+        "durationMs": 5334,
+        "paid": true
+      },
+      {
+        "category": "web_sentiment",
+        "resource": "https://orbisapi.com/proxy/wallet-address-risk-api-c6680c",
+        "status": "ok",
+        "adapterPath": "pattern",
+        "amountUsdc": 0.001,
+        "durationMs": 4553,
+        "paid": true
+      }
+    ],
+    "walletNetwork": "base",
+    "totalSpentUsdc": 0.0109
+  }
+}

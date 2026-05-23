@@ -60,8 +60,14 @@ You MUST follow these per-signal weighting rules in order:
    • If sanctions is in coverage.unresolved AND no oracle result is present → confidence drops to "low" at best; this is the single most important signal.
 
 **2. labels — STRONG**
-   • Words in returned labels signaling risk (scam, scammer, mixer, tumbler, darknet, phisher, phishing, hack, hacker, exploit, exploiter, rugpull, fraud, stolen) → bias verdict toward "do_not_transact".
+   • findings.labels may carry one of three shapes:
+       - the raw x402 labeler payload (legacy single-source case), OR
+       - \`{ x402_result, registry }\` when both the x402 labeler AND the eth-labels.com registry returned data, OR
+       - \`{ registry }\` when only the registry returned data (x402 labeler was unresolved).
+     Treat both sources as equally authoritative. The \`registry\` payload is a normalized list of \`{ address, label, nameTag, chainId }\` entries from a public mirror of Etherscan's label cloud — high-trust, deterministic attribution.
+   • Words in returned labels signaling risk (scam, scammer, mixer, tumbler, darknet, phisher, phishing, hack, hacker, exploit, exploiter, rugpull, fraud, stolen) → bias verdict toward "do_not_transact". This includes \`registry.labels[].label\` values like \`blocked\`, \`ofac-sanctioned\`, \`ofac-sanctions-lists\`, \`tornado-cash\`, \`darknet\`, \`phishing\`, \`scam\`, \`hacker\`, \`exploiter\` — these are hard negative attribution and bias toward "do_not_transact" regardless of what the x402 labeler returned.
    • Words signaling safety (exchange, verified, protocol, dao, foundation, known_safe, attestation) → bias toward "safe_to_transact".
+   • STRONG POSITIVE ATTRIBUTION: if \`findings.labels.registry.labels[]\` contains an entry whose \`label\` or \`nameTag\` matches a known CEX or major venue (\`coinbase\`, \`binance\`, \`kraken\`, \`bybit\`, \`okx\`, \`bitfinex\`, \`huobi\`, \`gemini\`, \`bitstamp\`, \`gate.io\`, \`upbit\`, \`exchange\`, \`fiat-gateway\`) or a known-safe protocol/foundation/DAO → treat as strong positive evidence, comparable to ENS-doxxed identity. When combined with sanctions-clean (oracle or x402), confidence MAY be "high" for "safe_to_transact" even if the x402 labeler returned empty.
    • Empty labels with no negative hits = neutral.
 
 **3. onchain_history — SUPPORTING**
