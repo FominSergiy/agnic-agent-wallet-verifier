@@ -43,6 +43,10 @@ export interface PlanEvent {
   services: PlanEventService[];
   totalEstimatedCostUsdc: number;
   walletNetwork: WalletNetwork;
+  // Populated by /discover-stream so the UI can surface categories with no
+  // viable service. verify.ts intentionally omits this — its plan emission
+  // is a mid-pipeline status, not the final discover result.
+  unresolvedCategories?: Category[];
   at: string;
 }
 
