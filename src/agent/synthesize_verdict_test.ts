@@ -150,3 +150,76 @@ Deno.test("synthesizeVerdict returns insufficient_data when fixture says so", as
   assertEquals(out.verdict, "insufficient_data");
   assertEquals(out.confidence, "low");
 });
+
+Deno.test("cex_registry_attribution_serialized_into_prompt", async () => {
+  const captured: { model?: string; prompt?: string } = {};
+  const llm = fixtureLlm(SAFE_VERDICT, captured);
+  const findings = {
+    sanctions: { chainalysis_oracle: { isSanctioned: false } },
+    labels: {
+      registry: {
+        source: "eth_labels_registry",
+        endpoint: "https://eth-labels.com/labels/0x71660c4005BA85c37ccec55d0C4493E66Fe775d3",
+        labels: [
+          { label: "coinbase", nameTag: "Coinbase 1", chainId: 1 },
+          { label: "fiat-gateway", nameTag: "Coinbase 1", chainId: 1 },
+        ],
+      },
+    },
+  };
+  await synthesizeVerdict(
+    inputWith({ findings, resolved: ["sanctions", "labels"] }),
+    { llm },
+  );
+  // Prompt must carry both the registry shape marker and the CEX attribution text.
+  assertEquals(captured.prompt?.includes("registry"), true);
+  assertEquals(captured.prompt?.includes("coinbase"), true);
+  assertEquals(captured.prompt?.includes("Coinbase 1"), true);
+});
+
+Deno.test("registry_negative_label_serialized_into_prompt", async () => {
+  const captured: { model?: string; prompt?: string } = {};
+  const llm = fixtureLlm(SANCTIONED_VERDICT, captured);
+  const findings = {
+    sanctions: { sanctions_match: false },
+    labels: {
+      x402_result: { tags: [] },
+      registry: {
+        source: "eth_labels_registry",
+        labels: [
+          { label: "blocked", nameTag: "OFAC Blocked", chainId: 1 },
+          { label: "ofac-sanctions-lists", nameTag: null, chainId: 1 },
+        ],
+      },
+    },
+  };
+  await synthesizeVerdict(
+    inputWith({ findings, resolved: ["sanctions", "labels"] }),
+    { llm },
+  );
+  // The merged shape and the negative labels must both appear so the policy can act on them.
+  assertEquals(captured.prompt?.includes("x402_result"), true);
+  assertEquals(captured.prompt?.includes("registry"), true);
+  assertEquals(captured.prompt?.includes("blocked"), true);
+  assertEquals(captured.prompt?.includes("ofac-sanctions-lists"), true);
+});
+
+Deno.test("prompt_documents_registry_rules_and_shape", async () => {
+  const captured: { model?: string; prompt?: string } = {};
+  const llm = fixtureLlm(SAFE_VERDICT, captured);
+  await synthesizeVerdict(
+    inputWith({
+      findings: { sanctions: { sanctions_match: false } },
+      resolved: ["sanctions"],
+    }),
+    { llm },
+  );
+  // The PREAMBLE must explain the three possible findings.labels shapes,
+  // the CEX-attribution allow-list, and the registry-negative blocklist.
+  const p = captured.prompt ?? "";
+  assertEquals(p.includes("x402_result, registry"), true);
+  assertEquals(p.includes("STRONG POSITIVE ATTRIBUTION"), true);
+  assertEquals(p.includes("ofac-sanctioned"), true);
+  assertEquals(p.includes("tornado-cash"), true);
+  assertEquals(p.includes("fiat-gateway"), true);
+});
