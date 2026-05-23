@@ -25,11 +25,13 @@
     "@modelcontextprotocol/sdk/": "npm:/@modelcontextprotocol/sdk@^1.29.0/"
   },
   "lint": {
+    "include": ["src/"],
     "rules": {
       "exclude": ["no-explicit-any"]
     }
   },
   "fmt": {
+    "include": ["src/"],
     "indentWidth": 2,
     "singleQuote": false
   }
