@@ -491,6 +491,8 @@ export async function synthesizeVerdict(
       <section className="docs-section">
         <div className="docs-eyebrow">04 — Project</div>
         <h2>Stack &amp; team</h2>
+
+        <h3>Stack</h3>
         <ul className="docs-bullets">
           <li>
             <strong>Runtime:</strong> Deno + Hono on the backend, Vite +
@@ -513,11 +515,29 @@ export async function synthesizeVerdict(
             <strong>Integrations:</strong> Model Context Protocol SDK for
             the MCP tool surface.
           </li>
-          <li>
-            <strong>Team:</strong> one full-stack engineer in Toronto,
-            focused on agentic workflows.
-          </li>
         </ul>
+
+        <h3>Team</h3>
+        <div className="docs-team">
+          <img
+            src="/team/sergiy.jpg"
+            alt="Sergiy Fomin"
+            className="docs-team-photo"
+          />
+          <div className="docs-team-bio">
+            <strong>Sergiy Fomin</strong>
+            <p>
+              Toronto-based software engineer who found his way into code
+              through business school and a healthy dose of stubborn
+              self-teaching. By day I work on cloud infrastructure and
+              modernizing legacy systems (GCP, GKE, and the occasional
+              expedition into very old codebases). I'm at my best building
+              things, breaking them, and figuring out exactly why they broke.
+              Off the keyboard, you'll usually find me on my motorcycle, on a
+              snowboard, or solo-camping somewhere with no cell signal.
+            </p>
+          </div>
+        </div>
       </section>
 
       <section className="docs-section">
