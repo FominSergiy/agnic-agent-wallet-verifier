@@ -1,5 +1,12 @@
 import type { ReactNode } from "react";
+import hljs from "highlight.js/lib/core";
+import typescript from "highlight.js/lib/languages/typescript";
+import json from "highlight.js/lib/languages/json";
+import "highlight.js/styles/atom-one-dark.min.css";
 import { navigate } from "../router";
+
+hljs.registerLanguage("typescript", typescript);
+hljs.registerLanguage("json", json);
 
 interface CodeBlockProps {
   lang: string;
@@ -7,13 +14,14 @@ interface CodeBlockProps {
 }
 
 function Code({ lang, children }: CodeBlockProps) {
+  const highlighted = hljs.highlight(children.trim(), { language: lang, ignoreIllegals: true }).value;
   return (
     <figure className="docs-code">
       <div className="docs-code-bar">
         <span>{lang}</span>
       </div>
       <pre>
-        <code>{children}</code>
+        <code dangerouslySetInnerHTML={{ __html: highlighted }} />
       </pre>
     </figure>
   );
@@ -41,7 +49,7 @@ export function DocsPage() {
         <p>
           You hand Ward-o an EVM wallet address. It looks for risk-relevant
           paid services in the Coinbase x402 bazaar, picks one per category,
-          pays them in USDC on Base, and asks an LLM to weigh the evidence.
+          pays them in USDC, and asks an LLM to weigh the evidence.
           You get back a structured verdict —{" "}
           <Inline>safe_to_transact</Inline>, <Inline>do_not_transact</Inline>,
           or <Inline>insufficient_data</Inline> — plus on-chain receipts for
@@ -110,7 +118,7 @@ export function DocsPage() {
 
         <h3>Frontend (this page)</h3>
         <p>
-          A Vite + React SPA that streams Server-Sent Events from the backend
+          A Vite + React SPA that streams server events from the backend
           and renders them as a live terminal log plus structured cards. No
           business logic lives here — it's a thin window on top of{" "}
           <Inline>/verify-agent-stream</Inline>.
@@ -407,10 +415,81 @@ if (flaggedAttempt && flaggedAttempt.result) {
   };
 }`}
         </Code>
+        <p>
+          After all service data has been collected, everything is passed to
+          Claude Opus for a final synthesis — signals are weighed by category,
+          and a structured verdict is returned.
+        </p>
+        <Code lang="typescript">
+          {`const PROMPT_PREAMBLE = \`
+You are the final judgment layer of a wallet risk-verification agent.
+Decide whether it is safe to send money to this wallet.
+
+Signal weights (in order):
+  1. sanctions — HARD VETO: any match → do_not_transact, confidence "high"
+  2. labels    — STRONG: scam/mixer/exploit words → unsafe; exchange/protocol → safe
+  3. onchain_history — SUPPORTING: long active history → positive; new wallet → suspicious
+  4. web_sentiment   — SUPPORTING: scam/hack references → negative signal
+  5. ens       — CONFIRMATORY: non-null ENS name = doxxed identity, strong positive
+
+Confidence: "high" — sanctions hit or 3+ consistent categories
+            "medium" — 3+ categories, mixed but interpretable
+            "low" — ≤2 usable signal categories
+
+Return a structured WalletVerdict with verdict, confidence, headline,
+reasoning, per-category findings, and coverage.
+\`.trim();
+
+export async function synthesizeVerdict(
+  input: SynthesisInput,
+): Promise<WalletVerdict> {
+  const prompt = \`\${PROMPT_PREAMBLE}\\n\\nInput:\\n\${JSON.stringify(input, null, 2)}\`;
+  return await llm.generateStructured(WalletVerdictSchema, prompt, {
+    model: "anthropic/claude-opus-4.7",
+    toolName: "submit_wallet_verdict",
+  });
+}`}
+        </Code>
       </section>
 
       <section className="docs-section">
-        <div className="docs-eyebrow">03 — Project</div>
+        <div className="docs-eyebrow">03 — Result</div>
+        <h2>Structured response</h2>
+        <p>
+          Every surface — JSON endpoint, SSE stream, MCP tool — returns the
+          same <Inline>WalletVerdict</Inline> shape. One verdict, one
+          confidence level, per-category findings, full coverage accounting,
+          and a USDC receipt.
+        </p>
+        <Code lang="json">
+          {`{
+  "address": "0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045",
+  "chain": "eth",
+  "safe": true,
+  "verdict": "safe_to_transact",
+  "confidence": "high",
+  "headline": "Safe to transact — publicly doxxed wallet with clean sanctions screen.",
+  "reasoning": "The Chainalysis oracle returned no sanctions match on any supported chain. ENS reverse lookup resolved to 'vitalik.eth', indicating a publicly doxxed identity. On-chain history shows 5+ years of activity and thousands of transactions. No negative labels or web-sentiment signals were found.",
+  "findings": [
+    { "category": "sanctions",       "severity": "info", "finding": "Chainalysis oracle: not sanctioned on any supported chain." },
+    { "category": "ens",             "severity": "info", "finding": "ENS name resolved: vitalik.eth — publicly doxxed identity." },
+    { "category": "onchain_history", "severity": "info", "finding": "Active since 2016; 10k+ transactions; non-zero balance." },
+    { "category": "labels",          "severity": "info", "finding": "No negative labels found." },
+    { "category": "web_sentiment",   "severity": "info", "finding": "No scam or exploit references in web results." }
+  ],
+  "coverage": {
+    "requested":  ["sanctions", "labels", "onchain_history", "web_sentiment", "ens"],
+    "resolved":   ["sanctions", "labels", "onchain_history", "web_sentiment", "ens"],
+    "unresolved": []
+  },
+  "totalSpentUsdc": 0.043,
+  "generatedAt": "2026-05-24T14:32:10.000Z"
+}`}
+        </Code>
+      </section>
+
+      <section className="docs-section">
+        <div className="docs-eyebrow">04 — Project</div>
         <h2>Stack &amp; team</h2>
         <ul className="docs-bullets">
           <li>
@@ -442,7 +521,7 @@ if (flaggedAttempt && flaggedAttempt.result) {
       </section>
 
       <section className="docs-section">
-        <div className="docs-eyebrow">04 — Honest scorecard</div>
+        <div className="docs-eyebrow">05 — Honest scorecard</div>
         <h2>What's working</h2>
         <ul className="docs-bullets">
           <li>

@@ -559,12 +559,13 @@ body {
   font-size: 12.5px;
   line-height: 1.6;
   white-space: pre;
+  /* override hljs theme background so our dark block bg wins */
+  background: #1A1A1A !important;
 }
 
 .docs-code code {
   font-family: var(--mono);
-  background: transparent;
-  color: inherit;
+  background: transparent !important;
   font-size: inherit;
   padding: 0;
 }
