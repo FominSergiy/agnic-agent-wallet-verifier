@@ -41,7 +41,7 @@ export function DocsPage() {
         <p>
           You hand Ward-o an EVM wallet address. It looks for risk-relevant
           paid services in the Coinbase x402 bazaar, picks one per category,
-          pays them in USDC on Base, and asks Claude to weigh the evidence.
+          pays them in USDC on Base, and asks an LLM to weigh the evidence.
           You get back a structured verdict —{" "}
           <Inline>safe_to_transact</Inline>, <Inline>do_not_transact</Inline>,
           or <Inline>insufficient_data</Inline> — plus on-chain receipts for
@@ -50,9 +50,54 @@ export function DocsPage() {
         <p>
           The whole thing runs on Deno + Hono, talks to the Agnic gateway for
           both LLM inference and x402 settlement, and exposes itself three
-          ways: a streaming HTTP API, an MCP server, and the React UI you're
-          reading this on.
+          ways: an HTTP API (both streaming SSE and plain JSON), an MCP
+          server, and the React UI you're reading this on.
         </p>
+
+        <figure className="docs-flow">
+          <svg viewBox="0 0 760 130" role="img" aria-label="Discovery to verify pipeline">
+            <defs>
+              <marker id="docs-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerUnits="strokeWidth" markerWidth="6" markerHeight="6" orient="auto">
+                <path d="M 0 0 L 10 5 L 0 10 z" fill="currentColor" />
+              </marker>
+            </defs>
+            {/* Boxes */}
+            {[
+              { x: 10, label: "address" },
+              { x: 130, label: "detect network" },
+              { x: 270, label: "discover + rerank" },
+              { x: 420, label: "invoke (parallel)" },
+              { x: 560, label: "LLM synthesis" },
+              { x: 680, label: "verdict" },
+            ].map((b) => (
+              <g key={b.label}>
+                <rect x={b.x} y={45} width={b.label === "address" || b.label === "verdict" ? 70 : 110} height={40} rx={4} fill="none" stroke="currentColor" strokeOpacity="0.4" />
+                <text x={b.x + (b.label === "address" || b.label === "verdict" ? 35 : 55)} y={70} textAnchor="middle" fill="currentColor" fontSize="11" fontFamily="Menlo, monospace">{b.label}</text>
+              </g>
+            ))}
+            {/* Arrows */}
+            {[
+              { x1: 82, x2: 128 },
+              { x1: 242, x2: 268 },
+              { x1: 382, x2: 418 },
+              { x1: 532, x2: 558 },
+              { x1: 672, x2: 678 },
+            ].map((a, i) => (
+              <line key={i} x1={a.x1} y1={65} x2={a.x2} y2={65} stroke="currentColor" strokeOpacity="0.5" strokeWidth="1.2" markerEnd="url(#docs-arrow)" />
+            ))}
+            {/* Fanout fan above invoke */}
+            <g stroke="currentColor" strokeOpacity="0.25" strokeDasharray="2 3" strokeWidth="1">
+              <line x1={475} y1={45} x2={460} y2={20} />
+              <line x1={475} y1={45} x2={475} y2={18} />
+              <line x1={475} y1={45} x2={490} y2={20} />
+            </g>
+            <text x={475} y={14} textAnchor="middle" fill="currentColor" fillOpacity="0.55" fontSize="9" fontFamily="Menlo, monospace">N services</text>
+            {/* Short-circuit branch under discover */}
+            <line x1={325} y1={85} x2={325} y2={108} stroke="currentColor" strokeOpacity="0.3" strokeDasharray="2 3" strokeWidth="1" />
+            <text x={325} y={120} textAnchor="middle" fill="currentColor" fillOpacity="0.55" fontSize="9" fontFamily="Menlo, monospace">oracle short-circuit → verdict</text>
+          </svg>
+          <figcaption>One linear path on the happy day; alternates fan out from invoke; the oracle short-circuits the whole pipeline when an address is sanctioned.</figcaption>
+        </figure>
       </section>
 
       <section className="docs-section">
@@ -430,15 +475,7 @@ if (flaggedAttempt && flaggedAttempt.result) {
           <li>
             <strong>Param guessing.</strong> Every paid call where we
             have to infer the request body adds wall-clock time and
-            another LLM hop. The wins are at the edges — when we already
-            know a service and can fire a deterministic body, we're
-            sub-second.
-          </li>
-          <li>
-            <strong>The fix:</strong> hit known-good services with
-            cached, deterministic request bodies first, and only fan out
-            into discovery when those miss. The current code leans
-            heavily on dynamic discovery for novelty's sake.
+            another LLM hop.
           </li>
         </ul>
 
